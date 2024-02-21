@@ -1,7 +1,62 @@
 import numpy as np
+from scipy.optimize import curve_fit
+from scipy.special import gamma
+
+### Redshift efficiency: Normalize a sample of galaxy obtain from cuts to an input n(z)
+
+maximal_redshift_efficiency = 0.98
 
 
-def get_redshift_eff_one_band_cut(
+def n_z_function(z, A, z0, beta, d):
+    return (
+        A
+        * (beta / gamma(d / beta))
+        * (z ** (d - 1) / z0**d)
+        * np.exp(-((z / z0) ** beta))
+    )
+
+
+def fit_n_z(xdata, ydata):
+    p0 = [np.max(ydata), 0.3, 2.0, 2.0]
+    popt, _ = curve_fit(
+        n_z_function,
+        xdata=xdata,
+        ydata=ydata,
+        p0=p0,
+        bounds=([0.0, 0.0, 0.0, 0.0], [np.inf, np.inf, np.inf, np.inf]),
+        maxfev=10000,
+    )
+    return popt
+
+
+def compute_redshift_efficiency(
+    redshift_survey,
+    n_z_survey,
+    redshift_simu,
+    n_z_simu,
+    maximum_redshift_efficiency=None,
+):
+
+    n_z_parameter_survey = fit_n_z(redshift_survey, n_z_survey)
+    n_z_parameter_simu = fit_n_z(redshift_simu, n_z_simu)
+
+    redshift_efficiency = lambda z: n_z_function(
+        z, *n_z_parameter_survey
+    ) / n_z_function(z, *n_z_parameter_simu)
+    if maximum_redshift_efficiency is not None:
+        redshift_efficiency_maximized = np.vectorize(
+            lambda z: np.min([maximum_redshift_efficiency, redshift_efficiency(z)])
+        )
+        return redshift_efficiency_maximized
+    else:
+        return redshift_efficiency
+
+
+### SN efficiency: On a given sample, efficiency of getting the SNIa,
+### Does not contains redshift, and
+
+
+def get_host_eff_one_band_cut(
     file,
     seed,
     model_weights,
@@ -74,7 +129,11 @@ def sn_explosion(
     return mask_sn_explosion
 
 
-def return_weight_model(file, model, parameters):
+def return_weight_model(
+    file,
+    model,
+    parameters,
+):
     if model == "noweigths":
         weights = np.ones(file.shape[0])
     elif model == "ab":
@@ -85,7 +144,12 @@ def return_weight_model(file, model, parameters):
     return weights
 
 
-def compute_efficiency(file_sn, mask_magnitude, N_z=30, redshift_range=None):
+def compute_efficiency(
+    file_sn,
+    mask_magnitude,
+    N_z=30,
+    redshift_range=None,
+):
     if type(mask_magnitude) == list:
         print("Several masks not implemented for now")
 
@@ -98,7 +162,9 @@ def compute_efficiency(file_sn, mask_magnitude, N_z=30, redshift_range=None):
                 file_sn["redshift_true"][mask_magnitude] > redshift_range[0]
             ) & (file_sn["redshift_true"][mask_magnitude] < redshift_range[1])
         else:
-            mask_redshift = np.full(file_sn["redshift_true"].shape, True)
+            mask_redshift = np.full(
+                file_sn["redshift_true"][mask_magnitude].shape, True
+            )
         bins_z_centers = (bins_z[1:] + bins_z[:-1]) / 2
         count_z, _ = np.histogram(file_sn["redshift_true"], bins=bins_z)
         count_z_masked, _ = np.histogram(
