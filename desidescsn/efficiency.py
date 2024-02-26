@@ -2,9 +2,9 @@ import numpy as np
 from scipy.optimize import curve_fit
 from scipy.special import gamma
 
-### Redshift efficiency: Normalize a sample of galaxy obtain from cuts to an input n(z)
+from desidescsn import surveys
 
-maximal_redshift_efficiency = 0.98
+### Host redshift efficiency: Normalize a sample of galaxy obtain from cuts to an input n(z)
 
 
 def n_z_function(z, A, z0, beta, d):
@@ -29,7 +29,7 @@ def fit_n_z(xdata, ydata):
     return popt
 
 
-def compute_redshift_efficiency(
+def compute_host_efficiency(
     redshift_survey,
     n_z_survey,
     redshift_simu,
@@ -52,8 +52,46 @@ def compute_redshift_efficiency(
         return redshift_efficiency
 
 
-### SN efficiency: On a given sample, efficiency of getting the SNIa,
-### Does not contains redshift, and
+def compute_host_efficiency_survey(
+    method,
+    survey,
+    n_z_file=None,
+    redshift_efficiency_file=None,
+    redshift_array_simu=None,
+    area_simu=None,
+    maximum_redshift_efficiency=None,
+    strategy_index=0,
+):
+    if method == "simple":
+        return lambda z: eval(f"surveys.host_efficiency_{survey}_simple()")
+
+    else:
+        n_z_simu, redshift_simu = np.histogram(redshift_array_simu, bins=30)
+        redshift_simu_centers = (redshift_simu[:-1] + redshift_simu[1:]) / 2
+        delta_z = np.mean(redshift_simu_centers[1:] - redshift_simu_centers[:-1])
+        n_z_simu = n_z_simu / (area_simu * delta_z)
+
+        (
+            redshift_survey_centers,
+            n_z_survey,
+        ) = surveys.get_n_z_survey(
+            method,
+            survey,
+            n_z_file=n_z_file,
+            redshift_efficiency_file=redshift_efficiency_file,
+            strategy_index=strategy_index,
+        )
+        redshift_efficiency = compute_host_efficiency(
+            redshift_survey_centers,
+            n_z_survey,
+            redshift_simu_centers,
+            n_z_simu,
+            maximum_redshift_efficiency=maximum_redshift_efficiency,
+        )
+        return redshift_efficiency
+
+
+### SN redshift efficiency: On a given sample, efficiency of getting the SNIa host redshift.
 
 
 def get_host_eff_one_band_cut(
@@ -82,7 +120,7 @@ def get_host_eff_one_band_cut(
 
     mask_magnitude = file_sn[band] < magnitude_cut
 
-    redshift, efficiency = compute_efficiency(
+    redshift, efficiency = compute_sn_efficiency(
         file_sn,
         mask_magnitude,
         N_z=N_z,
@@ -144,7 +182,7 @@ def return_weight_model(
     return weights
 
 
-def compute_efficiency(
+def compute_sn_efficiency(
     file_sn,
     mask_magnitude,
     N_z=30,
@@ -171,3 +209,70 @@ def compute_efficiency(
             file_sn["redshift_true"][mask_magnitude][mask_redshift], bins=bins_z
         )
     return bins_z_centers, count_z_masked / count_z
+
+
+def compute_full_efficiency(
+    survey,
+    hashing_table,
+    file_simu_sn,
+    file_simu,
+    host_efficiency_estimator,
+    n_z_file=None,
+    redshift_efficiency_file=None,
+    area_simu=None,
+    maximum_redshift_efficiency=None,
+    N_z=30,
+    cut_color=True,
+    strategy_file=None,
+    strategy_index=0,
+):
+
+    if strategy_file is not None:
+        mask_magnitude_sn = eval(f"surveys.mask_magnitude_{survey}")(
+            file_simu_sn,
+            hashing_table,
+            cut_color=cut_color,
+            strategy_file=strategy_file,
+            strategy_index=strategy_index,
+        )
+
+        mask_magnitude_full = eval(f"surveys.mask_magnitude_{survey}")(
+            file_simu,
+            hashing_table,
+            cut_color=cut_color,
+            strategy_file=strategy_file,
+            strategy_index=strategy_index,
+        )
+    else:
+        mask_magnitude_sn = eval(f"surveys.mask_magnitude_{survey}")(
+            file_simu_sn,
+            hashing_table,
+            cut_color=cut_color,
+        )
+
+        mask_magnitude_full = eval(f"surveys.mask_magnitude_{survey}")(
+            file_simu,
+            hashing_table,
+            cut_color=cut_color,
+        )
+
+    redshift, sn_efficiency = compute_sn_efficiency(
+        file_simu_sn,
+        mask_magnitude_sn,
+        N_z=N_z,
+    )
+
+    host_efficiency = compute_host_efficiency_survey(
+        host_efficiency_estimator,
+        survey,
+        n_z_file=n_z_file,
+        redshift_efficiency_file=redshift_efficiency_file,
+        redshift_array_simu=file_simu["redshift_true"][mask_magnitude_full],
+        area_simu=area_simu,
+        maximum_redshift_efficiency=maximum_redshift_efficiency,
+        strategy_index=strategy_index,
+    )
+
+    normalized_efficiency = sn_efficiency * host_efficiency(redshift)
+
+    return redshift, normalized_efficiency, sn_efficiency, host_efficiency(redshift)

@@ -23,7 +23,7 @@ redshift_success_rate_DESIBGS = 0.95
 
 # LRG Hypothesis:
 # - zfiber = z (+++)
-# - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (++)
+# - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (+)
 # - No star-galaxy separation (---)
 
 
@@ -52,7 +52,6 @@ redshift_success_rate_DESILRG = 0.989
 # - No lower rfibertot and zfibertot cuts (--)
 # - No star-galaxy separation (---)
 
-magnitude_cut_DESI2 = 21.6  # Parent catalog cut, too large
 band_DESI2 = "zfiber"
 fiber_assignement_efficiency_DESI2 = 0.8
 redshift_success_rate_DESI2 = 0.95
@@ -61,30 +60,35 @@ redshift_success_rate_DESI2 = 0.95
 ### 4MOST CRS
 
 # BG Hypothesis:
-# - No W1 color cut (++)
+# - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (+)
 # - Only one global number for redshift completeness (+)
 # - VHS = ROMAN (--)
 
 magnitude_cut_CRSBG_1 = 16
 magnitude_cut_CRSBG_2 = 18
-color_cut_CRSBG = 0.1
+color_cut_CRSBG_1 = -1.6
+color_cut_CRSBG_2 = -0.5
+color_cut_CRSBG_3 = 0.1
+color_cut_CRSBG_4 = 0.1
+
 band_CRSBG_1 = "J"
 band_CRSBG_2 = "K"
+band_CRSBG_3 = "W1"
 
 fiber_assignement_efficiency_CRSBG = 1.0
 redshift_success_rate_CRSBG = 0.95
 
 # LRG Hypothesis:
-# - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (++)
+# - Only one color cut (+++)
+# - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (+)
 # - Only one global number for redshift completeness (+)
 # - VHS = ROMAN (--)
 
 magnitude_cut_CRSLRG_1 = 18
 magnitude_cut_CRSLRG_2 = 19.5
-color_cut_CRSLRG_1 = 0.25
-color_cut_CRSLRG_2 = 100000  # CR - change with antoine's value
+color_cut_CRSLRG_1 = -7.7
 band_CRSLRG_1 = "J"
-band_CRSLRG_2 = "K"
+band_CRSLRG_2 = "r"
 band_CRSLRG_3 = "W1"
 
 fiber_assignement_efficiency_CRSLRG = 1.0
@@ -94,7 +98,7 @@ redshift_success_rate_CRSLRG = 0.75
 ### 4MOST 4HS
 
 # Hypothesis:
-# - No fiber assignement efficiency loss (+++)
+# - No fiber assignement efficiency loss (+)
 # - No PV sub-sample included (+)
 # - No 2MASS extended source catalog (+)
 # - VHS = ROMAN (--)
@@ -114,6 +118,7 @@ redshift_success_rate_4HS = 0.98
 def mask_magnitude_DESIBGS(
     file_sn,
     hashing_table,
+    cut_color=True,
 ):
     key_r = hashing_table[band_DESIBGS]
     mask_magnitude = file_sn[key_r] < magnitude_cut_DESIBGS
@@ -128,6 +133,7 @@ def host_efficiency_DESIBGS_simple():
 def mask_magnitude_DESILRG(
     file_sn,
     hashing_table,
+    cut_color=True,
 ):
     key_zfiber = hashing_table[band_DESILRG_1]
     key_z = hashing_table[band_DESILRG_2]
@@ -145,15 +151,17 @@ def mask_magnitude_DESILRG(
     color_to_cut_6 = file_sn[key_r] - file_sn[key_W1]
 
     mask_magnitude = file_sn[key_zfiber] < magnitude_cut_DESILRG  # 1a
-    mask_magnitude &= color_to_cut_1 > color_cut_DESILRG_1  # 1b
-    mask_magnitude &= (color_to_cut_2 > color_cut_DESILRG_2) | (
-        color_to_cut_3 > color_cut_DESILRG_3
-    )  # 1c
-    mask_magnitude &= (
-        (color_to_cut_4 > color_cut_DESILRG_4) & (color_to_cut_5 > color_cut_DESILRG_5)
-    ) | (
-        color_to_cut_6 > color_cut_DESILRG_6
-    )  # 1d
+    if cut_color:
+        mask_magnitude &= color_to_cut_1 > color_cut_DESILRG_1  # 1b
+        mask_magnitude &= (color_to_cut_2 > color_cut_DESILRG_2) | (
+            color_to_cut_3 > color_cut_DESILRG_3
+        )  # 1c
+        mask_magnitude &= (
+            (color_to_cut_4 > color_cut_DESILRG_4)
+            & (color_to_cut_5 > color_cut_DESILRG_5)
+        ) | (
+            color_to_cut_6 > color_cut_DESILRG_6
+        )  # 1d
 
     return mask_magnitude
 
@@ -226,12 +234,13 @@ def mask_magnitude_DESI2(
     hashing_table,
     strategy_file=None,
     strategy_index=None,
+    cut_color=True,
 ):
+    if strategy_file is None:
+        raise ValueError("No strategy file for DESI2 magnitude masking")
+
     key_zfiber = hashing_table[band_DESI2]
-    if strategy_file is not None:
-        mag_cut = fitsio.FITS(strategy_file)[1]["zfibermax_cut"][strategy_index]
-    else:
-        mag_cut = magnitude_cut_DESI2
+    mag_cut = fitsio.FITS(strategy_file)[1]["zfibermax_cut"][strategy_index]
     mask_magnitude = file_sn[key_zfiber] < mag_cut
 
     return mask_magnitude
@@ -261,15 +270,22 @@ def n_z_DESI2_from_target_selection(
 def mask_magnitude_CRSBG(
     file_sn,
     hashing_table,
+    cut_color=True,
 ):
     key_J = hashing_table[band_CRSBG_1]
     key_K = hashing_table[band_CRSBG_2]
+    key_W1 = hashing_table[band_CRSBG_3]
 
-    color_to_cut = file_sn[key_J] - file_sn[key_K]
+    color_to_cut_1 = file_sn[key_J] - file_sn[key_K]
+    color_to_cut_2 = file_sn[key_J] - file_sn[key_W1]
 
     mask_magnitude = file_sn[key_J] > magnitude_cut_CRSBG_1
     mask_magnitude &= file_sn[key_K] < magnitude_cut_CRSBG_2
-    mask_magnitude &= color_to_cut > color_cut_CRSBG
+    if cut_color:
+        mask_magnitude &= color_to_cut_1 - 1.6 * color_to_cut_2 > color_cut_CRSBG_1
+        mask_magnitude &= color_to_cut_1 - 1.6 * color_to_cut_2 < color_cut_CRSBG_2
+        mask_magnitude &= color_to_cut_1 + 2.5 * color_to_cut_2 > color_cut_CRSBG_3
+        mask_magnitude &= color_to_cut_1 + 0.5 * color_to_cut_2 > color_cut_CRSBG_4
 
     return mask_magnitude
 
@@ -281,18 +297,18 @@ def host_efficiency_CRSBG_simple():
 def mask_magnitude_CRSLRG(
     file_sn,
     hashing_table,
+    cut_color=True,
 ):
 
     key_J = hashing_table[band_CRSLRG_1]
-    key_K = hashing_table[band_CRSLRG_2]
+    key_r = hashing_table[band_CRSLRG_2]
     key_W1 = hashing_table[band_CRSLRG_3]
-    color_to_cut_1 = file_sn[key_J] - file_sn[key_K]
-    color_to_cut_2 = "?"  # CR - replace by Antoine's value
+    color_to_cut_1 = file_sn[key_r] - file_sn[key_W1]
 
     mask_magnitude = file_sn[key_J] > magnitude_cut_CRSLRG_1
-    mask_magnitude &= file_sn[key_K] < magnitude_cut_CRSLRG_2
-    mask_magnitude &= color_to_cut_1 > color_cut_CRSLRG_1
-    mask_magnitude &= color_to_cut_2 > color_cut_CRSLRG_2
+    mask_magnitude &= file_sn[key_J] < magnitude_cut_CRSLRG_2
+    if cut_color:
+        mask_magnitude &= color_to_cut_1 - 0.5 * file_sn[key_W1] > color_cut_CRSLRG_1
 
     return mask_magnitude
 
@@ -318,13 +334,15 @@ def n_z_CRS_from_target_selection(
 def mask_magnitude_4HS(
     file_sn,
     hashing_table,
+    cut_color=True,
 ):
     key_J = hashing_table[band_4HS_1]
     key_K = hashing_table[band_4HS_2]
 
     color_to_cut = file_sn[key_J] - file_sn[key_K]
     mask_magnitude = file_sn[key_J] < magnitude_cut_4HS
-    mask_magnitude &= color_to_cut < color_cut_4HS
+    if cut_color:
+        mask_magnitude &= color_to_cut < color_cut_4HS
 
     return mask_magnitude
 
@@ -335,7 +353,16 @@ def host_efficiency_4HS_simple():
 
 def n_z_4HS_from_target_selection(
     n_z_file,
+    redshift_name="Z_HELIO",
+    zmax=1.2,
+    bins=50,
+    area_gama=180,
 ):
+    z_gama = fitsio.FITS(n_z_file)[1][redshift_name][:]
+    hist, edges = np.histogram(z_gama, bins=bins, range=(0.0, zmax))
+    z_centers = (edges[:-1] + edges[1:]) / 2
+    delta_z = np.mean(z_centers[1:] - z_centers[:-1])
+    n_z = hist / (area_gama * delta_z)
 
     return z_centers, n_z
 
@@ -348,6 +375,7 @@ def get_n_z_survey(
     survey,
     n_z_file=None,
     redshift_efficiency_file=None,
+    strategy_index=0,
 ):
     if method == "target_selection":
         if survey == "DESIBGS":
@@ -365,6 +393,7 @@ def get_n_z_survey(
         elif survey == "DESI2":
             redshift_survey, n_z_survey = n_z_DESI2_from_target_selection(
                 n_z_file,
+                strategy_index,
             )
         elif (survey == "CRSBG") | (survey == "CRSLRG"):
             redshift_survey, n_z_survey = n_z_CRS_from_target_selection(
@@ -395,40 +424,3 @@ def get_n_z_survey(
             )
 
     return redshift_survey, n_z_survey
-
-
-def host_efficiency_survey(
-    method,
-    survey,
-    n_z_file=None,
-    redshift_efficiency_file=None,
-    redshift_array_simu=None,
-    area_simu=None,
-    maximum_redshift_efficiency=None,
-):
-    if method == "simple":
-        return lambda z: eval(f"host_efficiency_{survey}_simple()")
-
-    else:
-        n_z_simu, redshift_simu = np.histogram(redshift_array_simu, bins=30)
-        redshift_simu_centers = (redshift_simu[:-1] + redshift_simu[1:]) / 2
-        delta_z = np.mean(redshift_simu_centers[1:] - redshift_simu_centers[:-1])
-        n_z_simu = n_z_simu / (area_simu * delta_z)
-
-        (
-            redshift_survey_centers,
-            n_z_survey,
-        ) = get_n_z_survey(
-            method,
-            survey,
-            n_z_file=n_z_file,
-            redshift_efficiency_file=redshift_efficiency_file,
-        )
-        redshift_efficiency = efficiency.compute_redshift_efficiency(
-            redshift_survey_centers,
-            n_z_survey,
-            redshift_simu_centers,
-            n_z_simu,
-            maximum_redshift_efficiency=maximum_redshift_efficiency,
-        )
-        return redshift_efficiency
