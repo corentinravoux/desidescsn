@@ -48,7 +48,7 @@ redshift_success_rate_DESILRG = 0.989
 
 # Hypothesis:
 # - zfiber = z (+++)
-# - No stellar rejection (++)
+# - No stellar rejection (+)
 # - No lower rfibertot and zfibertot cuts (--)
 # - No star-galaxy separation (---)
 
@@ -61,7 +61,6 @@ redshift_success_rate_DESI2 = 0.95
 
 # BG Hypothesis:
 # - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (+)
-# - Only one global number for redshift completeness (+)
 # - VHS = ROMAN (--)
 
 magnitude_cut_CRSBG_1 = 16
@@ -81,7 +80,6 @@ redshift_success_rate_CRSBG = 0.95
 # LRG Hypothesis:
 # - Only one color cut (+++)
 # - W1 (3400 nm) = ROMAN_obs_K213 (2125 nm) (+)
-# - Only one global number for redshift completeness (+)
 # - VHS = ROMAN (--)
 
 magnitude_cut_CRSLRG_1 = 18
@@ -98,7 +96,6 @@ redshift_success_rate_CRSLRG = 0.75
 ### 4MOST 4HS
 
 # Hypothesis:
-# - No fiber assignement efficiency loss (+)
 # - No PV sub-sample included (+)
 # - No 2MASS extended source catalog (+)
 # - VHS = ROMAN (--)
