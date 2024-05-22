@@ -174,11 +174,27 @@ def return_weight_model(
 ):
     if model == "noweigths":
         weights = np.ones(file.shape[0])
-    elif model == "ab":
+        
+    elif model == "snia":
         A = parameters["A"]
         B = parameters["B"]
         weights = A * file["stellar_mass"] + B * file["sfr"]
-
+        
+    elif model == "snia_pec":
+        A = parameters["A"]
+        B = parameters["B"]
+        sSFR_cut = parameters["sSFR_cut"] # -11.5 from Vincenxi et al. 2020 https://academic.oup.com/mnras/article/505/2/2819/6284776
+        weights = np.zeros(len(file["stellar_mass"]))
+        mask = np.log10(file['sfr']/file['stellar_mass']) >  sSFR_cut 
+        weights[mask] =  A * file["stellar_mass"][mask] + B * file["sfr"][mask]
+        
+    elif model == "sncc":
+        C = parameters['C'] # 0.16 for SNeII , 0.36 for SNIb/c from Vincenxi et al. 2020 https://academic.oup.com/mnras/article/505/2/2819/6284776
+        sSFR_cut = parameters["sSFR_cut"] # -11.5 from Vincenxi et al. 2020 https://academic.oup.com/mnras/article/505/2/2819/6284776
+        weights = np.zeros(len(file["stellar_mass"]))
+        mask = np.log10(file['sfr']/file['stellar_mass']) > sSFR_cut 
+        weights[mask] = file["stellar_mass"][mask] **C
+    
     return weights
 
 
