@@ -52,7 +52,15 @@ redshift_success_rate_DESILRG = 0.989
 # - No lower rfibertot and zfibertot cuts (--)
 # - No star-galaxy separation (---)
 
-band_DESI2 = "zfiber"
+
+color_cut_DESI2_1 = -0.6
+color_cut_DESI2_2 = 2.9
+color_cut_DESI2_3 = 1.8
+band_DESI2_1 = "zfiber"
+band_DESI2_2 = "z"
+band_DESI2_3 = "W1"
+band_DESI2_4 = "r"
+band_DESI2_5 = "g"
 fiber_assignement_efficiency_DESI2 = 0.8
 redshift_success_rate_DESI2 = 0.95
 
@@ -236,9 +244,26 @@ def mask_magnitude_DESI2(
     if strategy_file is None:
         raise ValueError("No strategy file for DESI2 magnitude masking")
 
-    key_zfiber = hashing_table[band_DESI2]
+    key_zfiber = hashing_table[band_DESI2_1]
+    key_z = hashing_table[band_DESI2_2]
+    key_W1 = hashing_table[band_DESI2_3]
+    key_r = hashing_table[band_DESI2_4]
+    key_g = hashing_table[band_DESI2_5]
+
+    color_to_cut_1 = (
+        file_sn[key_z] - file_sn[key_W1] - 0.8 * (file_sn[key_r] - file_sn[key_z])
+    )
+    color_to_cut_2 = file_sn[key_g] - file_sn[key_W1]
+    color_to_cut_3 = file_sn[key_r] - file_sn[key_W1]
+
     mag_cut = fitsio.FITS(strategy_file)[1]["zfibermax_cut"][strategy_index]
     mask_magnitude = file_sn[key_zfiber] < mag_cut
+
+    if cut_color:
+        mask_magnitude &= color_to_cut_1 > color_cut_DESI2_1  # LRG non-stellar cut
+        mask_magnitude &= (color_to_cut_2 > color_cut_DESI2_2) | (
+            color_to_cut_3 > color_cut_DESI2_3  # low-z cuts
+        )
 
     return mask_magnitude
 
