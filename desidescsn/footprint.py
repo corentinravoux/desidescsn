@@ -19,15 +19,39 @@ def get_desi_mask(
     return is_point_in_desi(tiles_selected, ra, dec)
 
 
-def get_desi2_mask(
-    ra,
-    dec,
-    variant=0,
+def get_desiext_mask(
+    desiext_footprint_file,
+    nside,
+    field="DESI1B_BRIGHT",
 ):
-    mask = (ra < 50) & (-15 < dec) & (dec < 3)
-    mask |= (ra > -50 + 360) & (-15 < dec) & (dec < 3)
-    mask |= (ra > 130) & (ra < 220) & (-15 < dec) & (dec <= 0)
-    mask |= (ra > 120) & (ra < 250) & (0 <= dec) & (dec < 15)
+    desiext_footprint = fitsio.FITS(desiext_footprint_file)[1][field][:]
+
+    desiext_footprint_resolved = hp.pixelfunc.ud_grade(
+        desiext_footprint,
+        nside,
+        pess=False,
+        order_in="NEST",
+        order_out=None,
+    )
+    mask = desiext_footprint_resolved != 0.0
+    return mask
+
+
+def get_desi2_mask(
+    desi2_footprint_file,
+    nside,
+    field="IBIS_WIDE",
+):
+    desi2_footprint = fitsio.FITS(desi2_footprint_file)[1][field][:]
+
+    desi2_footprint_resolved = hp.pixelfunc.ud_grade(
+        desi2_footprint,
+        nside,
+        pess=False,
+        order_in="NEST",
+        order_out=None,
+    )
+    mask = desi2_footprint_resolved != 0.0
     return mask
 
 
