@@ -205,8 +205,8 @@ def n_z_DESI_from_y1(
     n_z_file,
     redshift_efficiency_file,
     zmin=0.0,
-    zmax=1.2,
-    bins=50,
+    zmax=4.0,
+    bins=200,
 ):
     with open(redshift_efficiency_file, "r") as file:
         redshift_efficiency = yaml.safe_load(file)
@@ -219,6 +219,10 @@ def n_z_DESI_from_y1(
         )
     elif targets == "LRG":
         n_good_z = redshift_efficiency["nobs_lrg"] * redshift_efficiency["success_lrg"]
+    elif targets == "ELG":
+        n_good_z = redshift_efficiency["nobs_elg"] * redshift_efficiency["success_elg"]
+    elif targets == "QSO":
+        n_good_z = redshift_efficiency["nobs_qso"] * redshift_efficiency["success_qso"]
 
     file = fitsio.FITS(n_z_file)[1]
     file = file[["Z_not4clus"]]
