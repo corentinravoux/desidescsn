@@ -1,3 +1,17 @@
+"""Host- and SN-redshift efficiency modelling for DESI/DESC SN forecasts.
+
+Two efficiency ingredients are combined to forecast how many type-Ia supernova
+hosts a spectroscopic survey recovers a redshift for:
+
+* the **host redshift efficiency** — how the target-selection cuts of a survey
+  reweight the simulated host-galaxy redshift distribution towards the survey's
+  observed ``n(z)`` (via a fitted parametric ``n(z)`` model);
+* the **SN redshift efficiency** — on a simulated SN-host sample, the fraction
+  passing a survey's magnitude/colour cuts as a function of redshift.
+
+Survey-specific cuts and ``n(z)`` come from :mod:`desidescsn.surveys`.
+"""
+
 import numpy as np
 from scipy.optimize import curve_fit
 from scipy.special import gamma
@@ -8,6 +22,18 @@ from desidescsn import surveys
 
 
 def n_z_function(z, A, z0, beta, d):
+    """Parametric redshift distribution ``n(z)`` (Smail-type).
+
+    Args:
+        z (float | array-like): Redshift.
+        A (float): Overall amplitude.
+        z0 (float): Characteristic redshift.
+        beta (float): High-redshift fall-off exponent.
+        d (float): Low-redshift rise exponent.
+
+    Returns:
+        float | array-like: The number density at ``z``.
+    """
     return (
         A
         * (beta / gamma(d / beta))
@@ -17,6 +43,15 @@ def n_z_function(z, A, z0, beta, d):
 
 
 def fit_n_z(xdata, ydata):
+    """Fit the :func:`n_z_function` parameters to a measured ``n(z)``.
+
+    Args:
+        xdata (numpy.ndarray): Redshift bin centres.
+        ydata (numpy.ndarray): Measured number density per bin.
+
+    Returns:
+        numpy.ndarray: Best-fit ``[A, z0, beta, d]`` parameters.
+    """
     p0 = [np.max(ydata), 0.3, 2.0, 2.0]
     popt, _ = curve_fit(
         n_z_function,
@@ -36,7 +71,22 @@ def compute_host_efficiency(
     n_z_simu,
     maximum_redshift_efficiency=None,
 ):
+    """Build the host redshift-efficiency function from two ``n(z)`` samples.
 
+    Fits :func:`n_z_function` to the survey and simulation redshift
+    distributions and returns their ratio ``n_survey(z) / n_simu(z)`` as a
+    callable, optionally capped at a maximum value.
+
+    Args:
+        redshift_survey (numpy.ndarray): Survey redshift bin centres.
+        n_z_survey (numpy.ndarray): Survey number density.
+        redshift_simu (numpy.ndarray): Simulation redshift bin centres.
+        n_z_simu (numpy.ndarray): Simulation number density.
+        maximum_redshift_efficiency (float, optional): Upper cap on the ratio.
+
+    Returns:
+        callable: ``efficiency(z)`` giving the host redshift efficiency.
+    """
     n_z_parameter_survey = fit_n_z(redshift_survey, n_z_survey)
     n_z_parameter_simu = fit_n_z(redshift_simu, n_z_simu)
 
@@ -62,6 +112,28 @@ def compute_host_efficiency_survey(
     maximum_redshift_efficiency=None,
     strategy_index=0,
 ):
+    """Return the host redshift-efficiency function for a survey.
+
+    For the ``"simple"`` method this is the constant fibre-assignment x
+    redshift-success product of the survey; otherwise the simulated host ``n(z)``
+    is histogrammed and combined with the survey ``n(z)`` (via
+    :func:`compute_host_efficiency`).
+
+    Args:
+        method (str): ``"simple"`` or a data-driven method
+            (``"target_selection"`` / ``"y1"``, see
+            :func:`desidescsn.surveys.get_n_z_survey`).
+        survey (str): Survey identifier (e.g. ``"DESIBGS"``).
+        n_z_file (str, optional): Survey ``n(z)`` file.
+        redshift_efficiency_file (str, optional): Redshift-efficiency yaml file.
+        redshift_array_simu (numpy.ndarray, optional): Simulated host redshifts.
+        area_simu (float, optional): Simulated area (deg^2) for normalisation.
+        maximum_redshift_efficiency (float, optional): Upper cap on the ratio.
+        strategy_index (int, optional): Survey-strategy row index.
+
+    Returns:
+        callable: ``efficiency(z)`` giving the host redshift efficiency.
+    """
     if method == "simple":
         return lambda z: eval(f"surveys.host_efficiency_{survey}_simple()")
 
@@ -106,7 +178,27 @@ def get_host_eff_one_band_cut(
     cosmo,
     N_z=30,
 ):
+    """Compute the SN redshift efficiency after a single-band magnitude cut.
 
+    Draws SN explosions on a host sample, applies a magnitude cut in one band
+    and returns the recovered fraction vs redshift.
+
+    Args:
+        file (pandas.DataFrame): Host-galaxy sample.
+        seed (int): RNG seed for the SN draw.
+        model_weights (str): Weight model (see :func:`return_weight_model`).
+        parameters_weigths (dict): Weight-model parameters.
+        magnitude_cut (float): Magnitude threshold.
+        band (str): Column name of the magnitude band to cut on.
+        number_years (float): Survey duration (years).
+        rate (float): SN rate (per volume per year).
+        cosmo: Astropy cosmology (for comoving volume).
+        N_z (int, optional): Number of redshift bins.
+
+    Returns:
+        tuple: ``(redshift, efficiency, file_sn)`` — bin centres, recovered
+        fraction and the exploded-SN sub-sample.
+    """
     mask_sn_explosion = sn_explosion(
         file,
         seed,
@@ -138,6 +230,28 @@ def sn_explosion(
     rate,
     cosmo,
 ):
+    """Draw which host galaxies host an observable SN Ia over a survey window.
+
+    Estimates the expected number of SNe from the comoving volume, rate and
+    duration, then randomly selects host galaxies weighted by the chosen SN
+    weight model.
+
+    Note:
+        Only works for a rectangular RA/Dec area.
+
+    Args:
+        file (pandas.DataFrame): Host-galaxy sample (needs ``ra``/``dec``/
+            ``redshift_true`` and the columns used by the weight model).
+        seed (int): RNG seed.
+        model_weights (str): Weight model (see :func:`return_weight_model`).
+        parameters_weigths (dict): Weight-model parameters.
+        number_years (float): Survey duration (years).
+        rate (float): SN rate (per volume per year).
+        cosmo: Astropy cosmology (for comoving distance).
+
+    Returns:
+        numpy.ndarray: Boolean mask of host galaxies with a drawn SN.
+    """
     # CR - only works for rectangular area.
     area = (file["ra"].max() - file["ra"].min()) * (
         file["dec"].max() - file["dec"].min()
@@ -172,6 +286,19 @@ def return_weight_model(
     model,
     parameters,
 ):
+    """Return per-galaxy SN-host weights for a chosen SN model.
+
+    Args:
+        file (pandas.DataFrame): Host-galaxy sample (needs ``stellar_mass`` and
+            ``sfr`` for the non-trivial models).
+        model (str): One of ``"noweigths"`` (uniform), ``"snia"``
+            (A*M + B*SFR), ``"snia_pec"`` (A*M + B*SFR above an sSFR cut) or
+            ``"sncc"`` (M^C above an sSFR cut).
+        parameters (dict): Model parameters (``A``/``B``/``C``/``sSFR_cut``).
+
+    Returns:
+        numpy.ndarray: Per-galaxy weights (unnormalised).
+    """
     if model == "noweigths":
         weights = np.ones(file.shape[0])
         
@@ -204,6 +331,19 @@ def compute_sn_efficiency(
     N_z=30,
     redshift_range=None,
 ):
+    """Fraction of SN hosts passing a magnitude mask, as a function of redshift.
+
+    Args:
+        file_sn (pandas.DataFrame): SN-host sample (needs ``redshift_true``).
+        mask_magnitude (numpy.ndarray): Boolean mask of hosts passing the cut.
+        N_z (int, optional): Number of redshift bins.
+        redshift_range (tuple[float, float], optional): Restrict the masked
+            hosts to this redshift window.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, efficiency)`` — the
+        recovered fraction per redshift bin.
+    """
     if type(mask_magnitude) == list:
         print("Several masks not implemented for now")
 
@@ -242,7 +382,31 @@ def compute_full_efficiency(
     strategy_file=None,
     strategy_index=0,
 ):
+    """Combine SN and host redshift efficiencies into the full survey efficiency.
 
+    Applies the survey magnitude/colour mask to both the SN-host and full host
+    samples, computes the SN efficiency vs redshift and multiplies it by the
+    host redshift efficiency.
+
+    Args:
+        survey (str): Survey identifier (selects ``surveys.mask_magnitude_*``).
+        hashing_table (dict): Band-name -> dataframe-column mapping.
+        file_simu_sn (pandas.DataFrame): Simulated SN-host sample.
+        file_simu (pandas.DataFrame): Simulated full host sample.
+        host_efficiency_estimator (str): Host-efficiency method (``"simple"`` ...).
+        n_z_file (str, optional): Survey ``n(z)`` file.
+        redshift_efficiency_file (str, optional): Redshift-efficiency yaml file.
+        area_simu (float, optional): Simulated area (deg^2).
+        maximum_redshift_efficiency (float, optional): Cap on the host efficiency.
+        N_z (int, optional): Number of redshift bins.
+        cut_color (bool, optional): Apply the colour cuts as well as magnitude.
+        strategy_file (str, optional): DESI2-style strategy file.
+        strategy_index (int, optional): Strategy row index.
+
+    Returns:
+        tuple: ``(redshift, normalized_efficiency, sn_efficiency,
+        host_efficiency)``.
+    """
     if strategy_file is not None:
         mask_magnitude_sn = eval(f"surveys.mask_magnitude_{survey}")(
             file_simu_sn,

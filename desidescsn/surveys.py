@@ -1,3 +1,15 @@
+"""Per-survey target selection, host efficiency and ``n(z)`` for SN forecasts.
+
+Encodes the approximate spectroscopic target-selection cuts, fibre-assignment x
+redshift-success efficiencies and observed redshift distributions of the surveys
+considered for DESI/DESC SN host follow-up: DESI (BGS, LRG), DESI2, 4MOST CRS
+(BG, LRG) and 4HS. Module-level constants hold each survey's magnitude / colour
+thresholds; the ``mask_magnitude_*`` functions apply them to a galaxy sample,
+``host_efficiency_*_simple`` give the constant host efficiency, and the
+``n_z_*`` functions load the survey ``n(z)``. Band names are mapped to catalog
+columns through a ``hashing_table`` dict.
+"""
+
 import fitsio
 import numpy as np
 import pandas as pd
@@ -125,6 +137,16 @@ def mask_magnitude_DESIBGS(
     hashing_table,
     cut_color=True,
 ):
+    """Apply the DESI BGS magnitude selection to a galaxy sample.
+
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping.
+        cut_color (bool, optional): Unused for BGS (magnitude cut only).
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the r-band cut.
+    """
     key_r = hashing_table[band_DESIBGS]
     mask_magnitude = file_sn[key_r] < magnitude_cut_DESIBGS
 
@@ -132,6 +154,11 @@ def mask_magnitude_DESIBGS(
 
 
 def host_efficiency_DESIBGS_simple():
+    """DESI BGS constant host efficiency (fibre assignment x redshift success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_DESIBGS * redshift_success_rate_DESIBGS
 
 
@@ -140,6 +167,17 @@ def mask_magnitude_DESILRG(
     hashing_table,
     cut_color=True,
 ):
+    """Apply the DESI LRG magnitude and colour selection to a galaxy sample.
+
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping (uses
+            ``zfiber``/``z``/``W1``/``r``/``g``).
+        cut_color (bool, optional): Also apply the LRG colour cuts.
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the selection.
+    """
     key_zfiber = hashing_table[band_DESILRG_1]
     key_z = hashing_table[band_DESILRG_2]
     key_W1 = hashing_table[band_DESILRG_3]
@@ -172,6 +210,11 @@ def mask_magnitude_DESILRG(
 
 
 def host_efficiency_DESILRG_simple():
+    """DESI LRG constant host efficiency (fibre assignment x redshift success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_DESILRG * redshift_success_rate_DESILRG
 
 
@@ -180,6 +223,20 @@ def n_z_DESI_from_target_selection(
     n_z_file,
     redshift_efficiency_file,
 ):
+    """Build the DESI ``n(z)`` from a target-selection density file.
+
+    Weights the normalised redshift histogram by the good-redshift number
+    density (observed targets x per-tracer success rate from the yaml file).
+
+    Args:
+        targets (str): ``"BGS"`` or ``"LRG"``.
+        n_z_file (str): Text file with redshift bin edges and counts.
+        redshift_efficiency_file (str): Yaml with per-tracer nobs/success rates.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, n_z)`` (per deg^2 per
+        unit redshift).
+    """
     with open(redshift_efficiency_file, "r") as file:
         redshift_efficiency = yaml.safe_load(file)
     if targets == "BGS":
@@ -208,6 +265,22 @@ def n_z_DESI_from_y1(
     zmax=4.0,
     bins=200,
 ):
+    """Build the DESI ``n(z)`` from a DESI Y1 redshift catalog (private data).
+
+    Like :func:`n_z_DESI_from_target_selection` but histograms the observed
+    ``Z_not4clus`` redshifts from a Y1 FITS clustering catalog.
+
+    Args:
+        targets (str): ``"BGS"``, ``"LRG"``, ``"ELG"`` or ``"QSO"``.
+        n_z_file (str): Y1 clustering FITS catalog.
+        redshift_efficiency_file (str): Yaml with per-tracer nobs/success rates.
+        zmin (float, optional): Histogram lower edge.
+        zmax (float, optional): Histogram upper edge.
+        bins (int, optional): Number of redshift bins.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, n_z)``.
+    """
     with open(redshift_efficiency_file, "r") as file:
         redshift_efficiency = yaml.safe_load(file)
     if targets == "BGS":
@@ -245,6 +318,23 @@ def mask_magnitude_DESI2(
     strategy_index=None,
     cut_color=True,
 ):
+    """Apply the DESI2 magnitude and colour selection to a galaxy sample.
+
+    The z-fibre magnitude threshold is read from a survey-strategy FITS file.
+
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping.
+        strategy_file (str): Strategy FITS file with ``zfibermax_cut``.
+        strategy_index (int): Strategy row index.
+        cut_color (bool, optional): Also apply the colour cuts.
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the selection.
+
+    Raises:
+        ValueError: If ``strategy_file`` is None.
+    """
     if strategy_file is None:
         raise ValueError("No strategy file for DESI2 magnitude masking")
 
@@ -273,6 +363,11 @@ def mask_magnitude_DESI2(
 
 
 def host_efficiency_DESI2_simple():
+    """DESI2 constant host efficiency (fibre assignment x redshift success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_DESI2 * redshift_success_rate_DESI2
 
 
@@ -280,7 +375,18 @@ def n_z_DESI2_from_target_selection(
     n_z_file,
     strategy_index,
 ):
+    """Build the DESI2 ``n(z)`` from a survey-strategy FITS file.
 
+    Evaluates the fitted :func:`desidescsn.efficiency.n_z_function` with the
+    strategy's parameters, scaled by its target density.
+
+    Args:
+        n_z_file (str): Strategy FITS file (``Nspec/sqdeg``, ``nzfit_params_ccut``).
+        strategy_index (int): Strategy row index.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, n_z)``.
+    """
     desi2_strategy_file = fitsio.FITS(n_z_file)[1]
     density = desi2_strategy_file["Nspec/sqdeg"][strategy_index]
     n_z_params = desi2_strategy_file["nzfit_params_ccut"][strategy_index]
@@ -298,6 +404,16 @@ def mask_magnitude_CRSBG(
     hashing_table,
     cut_color=True,
 ):
+    """Apply the 4MOST CRS bright-galaxy magnitude and colour selection.
+
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping (``J``/``K``/``W1``).
+        cut_color (bool, optional): Also apply the colour cuts.
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the selection.
+    """
     key_J = hashing_table[band_CRSBG_1]
     key_K = hashing_table[band_CRSBG_2]
     key_W1 = hashing_table[band_CRSBG_3]
@@ -317,6 +433,11 @@ def mask_magnitude_CRSBG(
 
 
 def host_efficiency_CRSBG_simple():
+    """4MOST CRS BG constant host efficiency (fibre assignment x z success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_CRSBG * redshift_success_rate_CRSBG
 
 
@@ -325,7 +446,16 @@ def mask_magnitude_CRSLRG(
     hashing_table,
     cut_color=True,
 ):
+    """Apply the 4MOST CRS LRG magnitude and colour selection.
 
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping (``J``/``r``/``W1``).
+        cut_color (bool, optional): Also apply the colour cut.
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the selection.
+    """
     key_J = hashing_table[band_CRSLRG_1]
     key_r = hashing_table[band_CRSLRG_2]
     key_W1 = hashing_table[band_CRSLRG_3]
@@ -340,6 +470,11 @@ def mask_magnitude_CRSLRG(
 
 
 def host_efficiency_CRSLRG_simple():
+    """4MOST CRS LRG constant host efficiency (fibre assignment x z success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_CRSLRG * redshift_success_rate_CRSLRG
 
 
@@ -347,6 +482,15 @@ def n_z_CRS_from_target_selection(
     n_z_file,
     zmax=1.2,
 ):
+    """Load the 4MOST CRS ``n(z)`` from a two-column text file.
+
+    Args:
+        n_z_file (str): Text file with redshift and density columns.
+        zmax (float, optional): Upper redshift cut.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, n_z)`` below ``zmax``.
+    """
     n_redshift = np.loadtxt(n_z_file)
     mask = n_redshift[:, 0] < zmax
     z_centers = n_redshift[:, 0][mask]
@@ -362,6 +506,16 @@ def mask_magnitude_4HS(
     hashing_table,
     cut_color=True,
 ):
+    """Apply the 4HS magnitude and colour selection to a galaxy sample.
+
+    Args:
+        file_sn (pandas.DataFrame): Galaxy sample.
+        hashing_table (dict): Band-name -> column-name mapping (``J``/``K``).
+        cut_color (bool, optional): Also apply the J-K colour cut.
+
+    Returns:
+        numpy.ndarray: Boolean mask of galaxies passing the selection.
+    """
     key_J = hashing_table[band_4HS_1]
     key_K = hashing_table[band_4HS_2]
 
@@ -374,6 +528,11 @@ def mask_magnitude_4HS(
 
 
 def host_efficiency_4HS_simple():
+    """4HS constant host efficiency (fibre assignment x redshift success).
+
+    Returns:
+        float: The efficiency product.
+    """
     return fiber_assignement_efficiency_4HS * redshift_success_rate_4HS
 
 
@@ -384,6 +543,19 @@ def n_z_4HS_from_target_selection(
     bins=50,
     area_gama=180,
 ):
+    """Build the 4HS ``n(z)`` from a GAMA redshift catalog.
+
+    Args:
+        n_z_file (str): GAMA FITS catalog.
+        redshift_name (str, optional): Redshift column name.
+        zmax (float, optional): Histogram upper edge.
+        bins (int, optional): Number of redshift bins.
+        area_gama (float, optional): GAMA area (deg^2) for normalisation.
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(z_centers, n_z)`` (per deg^2 per
+        unit redshift).
+    """
     z_gama = fitsio.FITS(n_z_file)[1][redshift_name][:]
     hist, edges = np.histogram(z_gama, bins=bins, range=(0.0, zmax))
     z_centers = (edges[:-1] + edges[1:]) / 2
@@ -403,6 +575,22 @@ def get_n_z_survey(
     redshift_efficiency_file=None,
     strategy_index=0,
 ):
+    """Dispatch to the right ``n(z)`` loader for a survey and method.
+
+    Args:
+        method (str): ``"target_selection"`` (public predictions) or ``"y1"``
+            (private DESI Y1 data).
+        survey (str): Survey identifier (e.g. ``"DESIBGS"``, ``"CRSLRG"``).
+        n_z_file (str, optional): Survey ``n(z)`` file.
+        redshift_efficiency_file (str, optional): Redshift-efficiency yaml file.
+        strategy_index (int, optional): Strategy row index (DESI2).
+
+    Returns:
+        tuple[numpy.ndarray, numpy.ndarray]: ``(redshift_survey, n_z_survey)``.
+
+    Raises:
+        ValueError: If the method is not available for the survey.
+    """
     if method == "target_selection":
         if survey == "DESIBGS":
             redshift_survey, n_z_survey = n_z_DESI_from_target_selection(

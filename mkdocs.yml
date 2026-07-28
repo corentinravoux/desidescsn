@@ -1,0 +1,65 @@
+site_name: desidescsn
+site_description: DESI + DESC supernova host-redshift efficiency forecasts
+site_url: https://corentinravoux.github.io/desidescsn/
+repo_url: https://github.com/corentinravoux/desidescsn
+repo_name: corentinravoux/desidescsn
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.instant
+    - content.code.copy
+    - toc.follow
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight
+  - toc:
+      permalink: true
+  - tables
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: true
+            show_signature_annotations: true
+            separate_signature: true
+            filters: ["!^_"]
+            members_order: source
+            heading_level: 2
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - How it works: pipeline.md
+  - API reference:
+      - Overview: api/index.md
+      - surveys: api/surveys.md
+      - efficiency: api/efficiency.md
+      - footprint: api/footprint.md
+      - catalogs: api/catalogs.md

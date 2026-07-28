@@ -1,3 +1,11 @@
+"""Extract host-galaxy properties from DESC DC2 / Roman-Rubin mock catalogs.
+
+Thin wrapper over ``GCRCatalogs`` that pulls a fixed feature list (photometry in
+LSST/SDSS/Roman bands, redshift, star-formation rate and stellar mass) from a
+DESC mock catalog into a pandas dataframe and writes it to parquet, ready for
+the efficiency forecasts in :mod:`desidescsn.efficiency`.
+"""
+
 import GCRCatalogs
 import numpy as np
 import pandas as pd
@@ -53,6 +61,15 @@ feature_list_roman_rubin_light = np.array(
 
 
 def extract_dc2_properties(name_catalog, feature_list, path_out, redshift_cut=None):
+    """Extract a feature list from a DESC mock catalog and write it to parquet.
+
+    Args:
+        name_catalog (str): GCR catalog name (e.g. ``name_catalog_roman_rubin``).
+        feature_list (Sequence[str]): Quantities to extract (e.g.
+            ``feature_list_roman_rubin``).
+        path_out (str): Output parquet file path.
+        redshift_cut (float, optional): Keep only ``redshift_true`` below this.
+    """
     gc = GCRCatalogs.load_catalog(name_catalog)
     dict_quantities = gc.get_quantities(feature_list)
     df = pd.DataFrame(dict_quantities)
