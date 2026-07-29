@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using these metadata."
+title: desidescsn
+abstract: >-
+  Forecast how efficiently spectroscopic surveys recover the host-galaxy
+  redshifts of type-Ia supernovae — the key ingredient for combining DESI
+  (and DESI2 / 4MOST) spectroscopy with DESC / LSST supernova samples.
+type: software
+authors:
+  - given-names: Corentin
+    family-names: Ravoux
+    email: corentin.ravoux.research@gmail.com
+version: "1.0.0"
+date-released: 2026-07-29
+license: MIT
+repository-code: "https://github.com/corentinravoux/desidescsn"
+url: "https://corentinravoux.github.io/desidescsn/"
+doi: 10.5281/zenodo.21647721
+keywords:
+  - cosmology
+  - supernovae
+  - DESI
+  - DESC
+  - LSST
+  - spectroscopic efficiency
