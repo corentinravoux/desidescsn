@@ -1,5 +1,7 @@
 # desidescsn
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21647721.svg)](https://doi.org/10.5281/zenodo.21647721)
+
 Forecast how efficiently spectroscopic surveys recover the **host-galaxy
 redshifts of type-Ia supernovae** — the key ingredient for combining **DESI**
 (and DESI2 / 4MOST) spectroscopy with **DESC / LSST** supernova samples.
