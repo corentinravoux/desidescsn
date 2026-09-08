@@ -299,7 +299,7 @@ def n_z_DESI_from_y1(
 
     file = fitsio.FITS(n_z_file)[1]
     file = file[["Z_not4clus"]]
-    data = pd.DataFrame(file.read().byteswap().newbyteorder())
+    data = pd.DataFrame(file.read())
     hist, edges = np.histogram(data["Z_not4clus"], bins=bins, range=(zmin, zmax))
     n_z_normalized = hist / np.sum(hist)
     z_centers = (edges[:-1] + edges[1:]) / 2
