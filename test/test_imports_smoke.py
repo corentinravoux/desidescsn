@@ -26,6 +26,9 @@ def test_module_compiles(path):
 @pytest.mark.parametrize("module", CORE_MODULES)
 def test_core_module_imports(module):
     """Core modules import (they need only numpy/scipy/astropy/healpy/desimodel)."""
+    if module == "footprint":
+        # desimodel is part of the DESI software stack, not on PyPI.
+        pytest.importorskip("desimodel")
     importlib.import_module(f"desidescsn.{module}")
 
 

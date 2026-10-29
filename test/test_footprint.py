@@ -1,8 +1,12 @@
 """Unit tests for the offline parts of :mod:`desidescsn.footprint`."""
 
 import numpy as np
+import pytest
 
-from desidescsn import footprint
+# footprint imports desimodel (DESI software stack, not on PyPI).
+pytest.importorskip("desimodel")
+
+from desidescsn import footprint  # noqa: E402
 
 
 def test_create_healpix_map():
